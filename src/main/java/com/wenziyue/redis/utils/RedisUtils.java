@@ -2,10 +2,9 @@ package com.wenziyue.redis.utils;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
+import com.alibaba.fastjson.JSON;
 import org.springframework.stereotype.Component;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -164,6 +163,21 @@ public class RedisUtils {
 
     public Double zScore(String key, Object value) {
         return redisTemplate.opsForZSet().score(key, value);
+    }
+
+    /**
+     * 获取对象并反序列化为指定类型
+     */
+    public <T> T get(String key, Class<T> clazz) {
+        Object value = redisTemplate.opsForValue().get(key);
+        if (value == null) {
+            return null;
+        }
+        if (clazz.isInstance(value)) {
+            return clazz.cast(value);
+        }
+        // 如果不是直接实例，尝试用 fastjson 反序列化
+        return JSON.parseObject(value.toString(), clazz);
     }
 
 }
