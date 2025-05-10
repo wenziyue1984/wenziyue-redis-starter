@@ -1,0 +1,60 @@
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                              http://maven.apache.org/xsd/settings-1.0.0.xsd">
+
+    <!-- 认证信息：用于部署到 GitHub Packages -->
+    <servers>
+        <server>
+            <id>github-redis</id>
+            <username>${env.GITHUB_ACTOR}</username>         <!-- 自动注入当前 GitHub 用户名 -->
+            <password>${env.GITHUB_TOKEN}</password>         <!-- 自动注入 GITHUB_TOKEN，无需手动配置 -->
+        </server>
+    </servers>
+
+    <!-- 配置使用阿里云和中央仓库的镜像源 -->
+    <profiles>
+        <profile>
+            <id>aliyun</id>
+            <repositories>
+                <!-- 阿里云公共仓库：速度快 -->
+                <repository>
+                    <id>aliyun</id>
+                    <url>https://maven.aliyun.com/repository/public</url>
+                    <releases><enabled>true</enabled></releases>
+                    <snapshots><enabled>false</enabled></snapshots>
+                </repository>
+
+                <!-- Maven Central 作为兜底 -->
+                <repository>
+                    <id>central</id>
+                    <url>https://repo.maven.apache.org/maven2</url>
+                    <releases><enabled>true</enabled></releases>
+                    <snapshots><enabled>false</enabled></snapshots>
+                </repository>
+            </repositories>
+
+            <!-- 插件仓库也配置为阿里云和中央仓库 -->
+            <pluginRepositories>
+                <pluginRepository>
+                    <id>aliyun</id>
+                    <url>https://maven.aliyun.com/repository/public</url>
+                    <releases><enabled>true</enabled></releases>
+                    <snapshots><enabled>false</enabled></snapshots>
+                </pluginRepository>
+                <pluginRepository>
+                    <id>central</id>
+                    <url>https://repo.maven.apache.org/maven2</url>
+                    <releases><enabled>true</enabled></releases>
+                    <snapshots><enabled>false</enabled></snapshots>
+                </pluginRepository>
+            </pluginRepositories>
+        </profile>
+    </profiles>
+
+    <!-- 启用 aliyun 配置 -->
+    <activeProfiles>
+        <activeProfile>aliyun</activeProfile>
+    </activeProfiles>
+
+</settings>

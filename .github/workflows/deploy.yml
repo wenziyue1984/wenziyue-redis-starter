@@ -1,0 +1,41 @@
+# 工作流名称：你在 GitHub Actions 页面会看到这个名称
+name: Deploy to GitHub Packages
+
+# 触发条件：当你 push 的 tag 以 v 开头（比如 v1.0.0）时触发部署
+on:
+  push:
+    tags:
+      - 'v*'  # 只有推送形如 v1.0.0、v2.3.4 的 tag 才会触发部署
+
+jobs:
+  deploy:  # 作业名称（可以自定义）
+    runs-on: ubuntu-latest  # 指定在 GitHub 托管的最新 Ubuntu 虚拟机上运行
+
+    steps:  # 定义一系列构建步骤
+      - name: Checkout code  # 步骤1：检出源码
+        uses: actions/checkout@v4  # 使用官方提供的 action 拉取当前项目的源代码
+
+      - name: Set up JDK 8  # 步骤2：配置 Java 开发环境
+        uses: actions/setup-java@v4  # 使用官方提供的 Java 安装器
+        with:
+          distribution: 'temurin'  # 指定使用 Temurin JDK（推荐的开放 JDK 发行版）
+          java-version: '8'  # 指定 JDK 版本为 1.8
+
+      - name: Display Maven version  # 步骤3：输出当前 Maven 版本
+        run: mvn -v  # 显示 Maven 的版本信息和 JAVA_HOME（调试用，可选）
+
+#      - name: Deploy only main module to GitHub Packages # 步骤4：执行部署命令
+#        run: mvn --file pom.xml clean deploy -pl '!test-app' -s .github/settings.xml -DskipTests --batch-mode # 跳过 test-app，指定只部署主模块
+
+      - name: Deploy to GitHub Packages
+        run: mvn clean deploy -s .github/settings.xml -DskipTests --batch-mode
+        # - clean：清理旧的构建
+        # - deploy：部署到 distributionManagement 中定义的仓库（即 GitHub Packages）
+        # - -s .github/settings.xml：使用你自定义的 GitHub Actions 专用 Maven 配置文件
+        # - -DskipTests：跳过测试阶段，加快部署速度
+        # - --batch-mode：非交互模式，适合 CI/CD 环境，防止因交互等待卡住流程
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GitHub 会自动注入这个 token，授权你推送包到 GitHub Packages
+          # settings.xml 中使用了 ${env.GITHUB_TOKEN} 作为认证密码
