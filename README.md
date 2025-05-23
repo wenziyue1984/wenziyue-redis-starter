@@ -14,8 +14,27 @@
 ---
 
 ## **引入依赖**
+首先在settings.xml中添加以下认证信息
+```xml
+<server>
+    <id>wenziyue-redis</id>
+    <username>你的GitHub用户名</username>
+    <password>你的GitHub Token（建议只赋予 read:packages 权限）</password>
+</server>
+```
 
-在你的项目的 pom.xml 中添加：
+再在 `pom.xml` 中添加 GitHub 仓库地址：
+
+```xml
+<!-- pom.xml 中添加仓库地址（id 要与上面保持一致） -->
+<repositories>
+    <repository>
+        <id>wenziyue-redis</id>
+        <url>https://maven.pkg.github.com/wenziyue1984/wenziyue-redis-starter</url>
+    </repository>
+</repositories>
+```
+然后引入依赖：
 
 ```xml
 <dependency>
@@ -24,6 +43,7 @@
     <version>1.0.0</version>
 </dependency>
 ```
+> 💡 注意：你需要在 Maven 的 `settings.xml` 中配置 GitHub Token 授权，才能访问私有或 GitHub Packages 的依赖。
 ---
 
 ## **配置示例（application.yml）**
