@@ -81,12 +81,22 @@ public class RedisUtils {
         redisTemplate.opsForHash().put(key, field, value);
     }
 
+    public void hSet(String key, String field, Object value, long time, TimeUnit timeUnit) {
+        redisTemplate.opsForHash().put(key, field, value);
+        redisTemplate.expire(key, time, timeUnit);
+    }
+
     public Object hGet(String key, String field) {
         return redisTemplate.opsForHash().get(key, field);
     }
 
     public void hSetAll(String key, Map<String, Object> map) {
         redisTemplate.opsForHash().putAll(key, map);
+    }
+
+    public void hSetAll(String key, Map<String, Object> map, long time, TimeUnit timeUnit) {
+        redisTemplate.opsForHash().putAll(key, map);
+        redisTemplate.expire(key, time, timeUnit);
     }
 
     public Map<Object, Object> hGetAll(String key) {
@@ -107,8 +117,18 @@ public class RedisUtils {
         redisTemplate.opsForList().leftPush(key, value);
     }
 
+    public void lPush(String key, Object value, long time, TimeUnit timeUnit) {
+        redisTemplate.opsForList().leftPush(key, value);
+        redisTemplate.expire(key, time, timeUnit);
+    }
+
     public void rPush(String key, Object value) {
         redisTemplate.opsForList().rightPush(key, value);
+    }
+
+    public void rPush(String key, Object value, long time, TimeUnit timeUnit) {
+        redisTemplate.opsForList().rightPush(key, value);
+        redisTemplate.expire(key, time, timeUnit);
     }
 
     public Object lPop(String key) {
@@ -134,6 +154,18 @@ public class RedisUtils {
         redisTemplate.opsForSet().add(key, values);
     }
 
+    /**
+     * 往 Set 里添加成员，同时给整个 Set 设置过期时间
+     * @param key    Redis 键
+     * @param timeout 过期时间
+     * @param timeUnit 过期时间单位
+     * @param values 要加入 Set 的成员
+     */
+    public void sAddAndExpire(String key, long timeout, TimeUnit timeUnit, Object... values) {
+        redisTemplate.opsForSet().add(key, values);
+        redisTemplate.expire(key, timeout, timeUnit);
+    }
+
     public Set<Object> sMembers(String key) {
         return redisTemplate.opsForSet().members(key);
     }
@@ -151,6 +183,11 @@ public class RedisUtils {
 
     public void zAdd(String key, Object value, double score) {
         redisTemplate.opsForZSet().add(key, value, score);
+    }
+
+    public void zAdd(String key, Object value, double score, long time, TimeUnit timeUnit) {
+        redisTemplate.opsForZSet().add(key, value, score);
+        redisTemplate.expire(key, time, timeUnit);
     }
 
     public Set<Object> zRange(String key, long start, long end) {
