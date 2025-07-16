@@ -32,6 +32,12 @@ public class RedisStreamUtilsTest {
 
     private static String messageId;
 
+    @BeforeAll
+    static void clearStreamBefore(@Autowired RedisUtils redisUtils) {
+        // 删除整个 stream
+        redisUtils.delete(STREAM_KEY);
+    }
+
     @Test
     @Order(1)
     @DisplayName("创建消费者组")
@@ -70,6 +76,25 @@ public class RedisStreamUtilsTest {
 
     @Test
     @Order(4)
+    @DisplayName("首次查看待确认消息摘要")
+    void testXPendingSummaryFirst() {
+        PendingMessagesSummary summary = redisUtils.xPendingSummary(STREAM_KEY, GROUP_NAME);
+
+        Range<String> idRange = summary.getIdRange();
+
+        String minId = idRange.getLowerBound().isBounded() ? idRange.getLowerBound().getValue().get() : "N/A";
+        String maxId = idRange.getUpperBound().isBounded() ? idRange.getUpperBound().getValue().get() : "N/A";
+
+        log.info("First pending summary: total={}, minId={}, maxId={}, consumers={}",
+                summary.getTotalPendingMessages(),
+                minId,
+                maxId,
+                summary.getPendingMessagesPerConsumer()
+        );
+    }
+
+    @Test
+    @Order(5)
     @DisplayName("确认消息已消费")
     void testXAck() {
         redisUtils.xAck(STREAM_KEY, GROUP_NAME, Collections.singletonList(messageId));
@@ -77,7 +102,7 @@ public class RedisStreamUtilsTest {
     }
 
     @Test
-    @Order(5)
+    @Order(6)
     @DisplayName("查看待确认消息摘要")
     void testXPendingSummary() {
         PendingMessagesSummary summary = redisUtils.xPendingSummary(STREAM_KEY, GROUP_NAME);
@@ -87,7 +112,7 @@ public class RedisStreamUtilsTest {
         String minId = idRange.getLowerBound().isBounded() ? idRange.getLowerBound().getValue().get() : "N/A";
         String maxId = idRange.getUpperBound().isBounded() ? idRange.getUpperBound().getValue().get() : "N/A";
 
-        log.info("Pending summary: total={}, minId={}, maxId={}, consumers={}",
+        log.info("Second pending summary: total={}, minId={}, maxId={}, consumers={}",
                 summary.getTotalPendingMessages(),
                 minId,
                 maxId,
@@ -96,7 +121,7 @@ public class RedisStreamUtilsTest {
     }
 
     @Test
-    @Order(6)
+    @Order(7)
     @DisplayName("获取消费者的待确认消息列表")
     void testXPending() {
         PendingMessages pending = redisUtils.xPending(STREAM_KEY, GROUP_NAME, CONSUMER_NAME, 10);
@@ -106,7 +131,7 @@ public class RedisStreamUtilsTest {
     }
 
     @Test
-    @Order(7)
+    @Order(8)
     @DisplayName("从指定 ID 开始读取")
     void testXReadFromId() {
         List<MapRecord<String, String, String>> records = redisUtils.xReadFromId(STREAM_KEY, "0", 5);
@@ -116,10 +141,16 @@ public class RedisStreamUtilsTest {
     }
 
     @Test
-    @Order(8)
+    @Order(9)
     @DisplayName("删除消息")
     void testXDel() {
         long deleted = redisUtils.xDel(STREAM_KEY, Collections.singletonList(messageId));
-        System.out.println("删除了 " + deleted + " 条消息");
+        log.info("删除了 " + deleted + " 条消息");
+    }
+
+    @AfterAll
+    static void clearStreamAfter(@Autowired RedisUtils redisUtils) {
+        // 删除整个 stream
+        redisUtils.delete(STREAM_KEY);
     }
 }
