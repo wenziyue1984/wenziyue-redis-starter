@@ -9,6 +9,7 @@
 - 基于 Spring Boot 自动配置
 - 默认使用 Lettuce 客户端（支持连接池）
 - 支持 String、Hash、List、Set、ZSet 五大数据结构操作
+- 支持 Redis Stream 消息队列操作（高级）
 - 支持 FastJSON 序列化存储对象
 - 提供 Redis 工具类 RedisUtils，便于业务中直接调用
 ---
@@ -40,7 +41,7 @@
 <dependency>
     <groupId>com.wenziyue</groupId>
     <artifactId>wenziyue-redis-starter</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.0(请使用最新版本)</version>
 </dependency>
 ```
 > 💡 注意：你需要在 Maven 的 `settings.xml` 中配置 GitHub Token 授权，才能访问私有或 GitHub Packages 的依赖。
@@ -79,9 +80,19 @@ private RedisUtils redisUtils;
 
 ```java
 redisUtils.set("key", "hello");
+redisUtils.set("key", "value", 60, TimeUnit.SECONDS); // 60 秒过期
+
 Object val = redisUtils.get("key");
 String str = val != null ? val.toString() : null;
+
 redisUtils.delete("key");
+```
+
+### ***原子自增***
+
+```java
+Long count = redisUtils.increment("counter", 1);
+Long countWithTTL = redisUtils.increment("counter", 1, 5, TimeUnit.MINUTES);
 ```
 
 ### ***设置过期时间***
@@ -131,6 +142,37 @@ User user = new User("张三", 18);
 redisUtils.set("user:1", user);
 User result = redisUtils.get("user:1", User.class);
 ```
+
+### ***Stream 消息队列操作***
+```java
+// 创建消费者组（幂等）
+redisUtils.xGroupCreate("article_like_stream", "like_group");
+
+// 添加消息到 Stream
+Map<String, String> msg = Map.of("userId", "1001", "articleId", "2001");
+redisUtils.xAdd("article_like_stream", msg);
+
+// 消费者读取消息（阻塞最多2秒）
+List<MapRecord<String, String, String>> messages = redisUtils.xReadGroup(
+    "article_like_stream", "like_group", "consumer1", 10, Duration.ofSeconds(2)
+);
+
+// 消息确认（手动ack）
+redisUtils.xAck("article_like_stream", "like_group", List.of("1709876543210-0"));
+
+// 删除已消费的消息
+redisUtils.xDel("article_like_stream", List.of("1709876543210-0", "1709876543211-0"));
+
+// 获取消费组摘要
+PendingMessagesSummary summary = redisUtils.xPendingSummary("article_like_stream", "like_group");
+
+// 获取某个消费者未确认的消息
+PendingMessages pending = redisUtils.xPending("article_like_stream", "like_group", "consumer1", 100);
+
+// 从指定 ID 开始读取消息（非消费组）
+List<MapRecord<String, String, String>> results = redisUtils.xReadFromId("article_like_stream", "0", 100);
+```
+
 ---
 
 ## **注意事项**
