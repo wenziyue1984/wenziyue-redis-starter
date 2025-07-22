@@ -148,6 +148,44 @@ public class RedisStreamUtilsTest {
         log.info("删除了 " + deleted + " 条消息");
     }
 
+    @Test
+    @Order(10)
+    @DisplayName("测试 xClaim 转移消息所有权")
+    void testXClaim() {
+        // 重新发送一条消息
+        Map<String, String> data = new HashMap<>();
+        data.put("userId", "1002");
+        data.put("articleId", "2002");
+        String newMessageId = redisUtils.xAdd(STREAM_KEY, data);
+
+        // 模拟消费但不ack，使其进入pending
+        List<MapRecord<String, String, String>> records = redisUtils.xReadGroup(
+                STREAM_KEY, GROUP_NAME, CONSUMER_NAME, 1, Duration.ofSeconds(1)
+        );
+        Assertions.assertFalse(records.isEmpty(), "准备 claim 的消息读取失败");
+
+        // 暂停 2 秒，使其超过 minIdleTime
+        try {
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        // 执行 claim，将消息转移给新消费者
+        String newConsumer = "consumer_claim";
+        List<String> ids = Collections.singletonList(newMessageId);
+        List<MapRecord<String, Object, Object>> claimed = redisUtils.xClaim(
+                STREAM_KEY,
+                GROUP_NAME,
+                newConsumer,
+                Duration.ofSeconds(1),
+                ids
+        );
+
+        Assertions.assertFalse(claimed.isEmpty(), "claim 后未返回消息");
+        log.info("claim 成功，消息 id = {}, 新消费者 = {}", claimed.get(0).getId(), newConsumer);
+    }
+
     @AfterAll
     static void clearStreamAfter(@Autowired RedisUtils redisUtils) {
         // 删除整个 stream

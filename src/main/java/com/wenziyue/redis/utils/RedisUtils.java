@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.val;
 import org.springframework.data.domain.Range;
 import org.springframework.data.redis.RedisSystemException;
+import org.springframework.data.redis.connection.RedisStreamCommands;
 import org.springframework.data.redis.connection.stream.*;
 import org.springframework.data.redis.core.RedisTemplate;
 import com.alibaba.fastjson.JSON;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * Redis 工具类，封装常用操作
@@ -446,6 +448,34 @@ public class RedisUtils {
     }
 
     /**
+     * 获取消费组内所有未确认的消息(不需要消费者名)
+     * @param key      Stream 的 key
+     * @param group    消费者组
+     * @param count    最多拉多少条
+     * @return 待确认消息列表（含 ID、时间戳、delivery count 等信息）
+     */
+    public PendingMessages xPending(String key, String group, int count) {
+        return streamOps().pending(key, group, Range.unbounded(), count);
+    }
+
+    /**
+     * 获取消费组内所有未确认的消息，指定一个偏移量（offset）
+     * @param key      Stream 的 key
+     * @param group    消费者组
+     * @param offset   偏移量
+     * @param count    最多拉多少条
+     * @return 待确认消息列表（含 ID、时间戳、delivery count 等信息）
+     */
+    public PendingMessages xPendingHead(String key, String group, String offset, int count) {
+        return streamOps().pending(
+                key,
+                group,
+                Range.closed(offset, "+"),
+                count
+        );
+    }
+
+    /**
      * 从指定消息 ID 开始读取（非消费者组方式）
      * @param key      Stream 的 key
      * @param recordId 起始消息 ID（如 "0" 或 "1709876123456-0"）
@@ -457,6 +487,39 @@ public class RedisUtils {
                 StreamReadOptions.empty().count(count),
                 StreamOffset.create(key, ReadOffset.from(recordId))
         );
+    }
+
+    private final RedisTemplate<String, String> redisStreamTemplate;
+
+    /**
+     * 将 Redis Stream 中处于 Pending 状态并且超过最小空闲时间的消息重新分配给指定的消费者。
+     * <p>
+     * 此方法通常用于处理“僵尸消息”或“死信消息”，即已被某个消费者读取但未确认（ACK）的消息，
+     * 如果该消息长时间未被处理完毕，可通过该方法将其转移到新的消费者进行重新处理。
+     *
+     * @param key           Redis Stream 的键名，即消息所在的 stream。
+     * @param group         消费者组的名称。
+     * @param newConsumer   新的消费者名称，通常为当前实例的消费者标识。
+     * @param minIdleTime   消息的最小空闲时间（即从上次 delivery 到现在的时间）。只有超过该时间的消息才会被重新分配。
+     * @param messageIds    待重新 claim 的消息 ID 列表。
+     * @return              被成功 claim 的消息列表。返回的消息类型为 {@code MapRecord<String, Object, Object>}，
+     *                      可通过 {@code record.getValue()} 获取消息内容并做进一步处理。
+     */
+    public List<MapRecord<String, Object, Object>> xClaim(String key,
+                                                          String group,
+                                                          String newConsumer,
+                                                          Duration minIdleTime,
+                                                          List<String> messageIds) {
+        if (messageIds == null || messageIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return redisStreamTemplate.opsForStream().claim(
+                key,
+                group,
+                newConsumer,
+                RedisStreamCommands.XClaimOptions.minIdle(minIdleTime).ids(messageIds.stream()
+                        .map(RecordId::of).toArray(RecordId[]::new)));
     }
 
 
