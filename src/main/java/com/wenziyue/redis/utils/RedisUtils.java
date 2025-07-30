@@ -12,6 +12,7 @@ import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
 import com.alibaba.fastjson.JSON;
 import org.springframework.data.redis.core.StreamOperations;
+import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
 
@@ -136,6 +137,21 @@ public class RedisUtils {
     public Long increment(String key, long delta, long timeout, TimeUnit unit) {
         long timeoutSeconds = unit.toSeconds(timeout);
         return redisTemplate.execute(incrementWithExpire, Collections.singletonList(key), delta, timeoutSeconds);
+    }
+
+    /**
+     * 获取对象并反序列化为指定类型
+     */
+    public <T> T get(String key, Class<T> clazz) {
+        Object value = redisTemplate.opsForValue().get(key);
+        if (value == null) {
+            return null;
+        }
+        if (clazz.isInstance(value)) {
+            return clazz.cast(value);
+        }
+        // 如果不是直接实例，尝试用 fastjson 反序列化
+        return JSON.parseObject(value.toString(), clazz);
     }
 
     // ======================== Hash ========================
@@ -337,18 +353,23 @@ public class RedisUtils {
     }
 
     /**
-     * 获取对象并反序列化为指定类型
+     * 获取 ZSet 中的所有元素（不含分数）
+     *
+     * @param key ZSet 的 key
+     * @return 元素集合，如果 key 不存在返回空集合
      */
-    public <T> T get(String key, Class<T> clazz) {
-        Object value = redisTemplate.opsForValue().get(key);
-        if (value == null) {
-            return null;
-        }
-        if (clazz.isInstance(value)) {
-            return clazz.cast(value);
-        }
-        // 如果不是直接实例，尝试用 fastjson 反序列化
-        return JSON.parseObject(value.toString(), clazz);
+    public Set<Object> zRangeAll(String key) {
+        return redisTemplate.opsForZSet().range(key, 0, -1);
+    }
+
+    /**
+     * 获取 ZSet 中的所有元素及其分数
+     *
+     * @param key ZSet 的 key
+     * @return 元素与分数组成的集合，如果 key 不存在返回空集合
+     */
+    public Set<ZSetOperations.TypedTuple<Object>> zRangeAllWithScores(String key) {
+        return redisTemplate.opsForZSet().rangeWithScores(key, 0, -1);
     }
 
     // ======================== Stream ========================

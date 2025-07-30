@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.core.ZSetOperations;
 
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -89,5 +90,48 @@ public class RedisZSetUtilsTest {
 
         assertFalse(redisUtils.hasKey(KEY_ZSET), "ZSet key 应该已过期");
         log.info("ZSet key {} 已成功过期", KEY_ZSET);
+    }
+
+    @Test
+    @Order(5)
+    @DisplayName("测试 zRangeAll")
+    void testZRangeAll() {
+        redisUtils.zAdd(KEY_ZSET, "player1", 100);
+        redisUtils.zAdd(KEY_ZSET, "player2", 200);
+        redisUtils.zAdd(KEY_ZSET, "player3", 150);
+
+        Set<Object> all = redisUtils.zRangeAll(KEY_ZSET);
+        log.info("zRangeAll -> {}", all);
+
+        assertEquals(3, all.size());
+        assertTrue(all.contains("player1"));
+        assertTrue(all.contains("player2"));
+        assertTrue(all.contains("player3"));
+    }
+
+    @Test
+    @Order(6)
+    @DisplayName("测试 zRangeAllWithScores")
+    void testZRangeAllWithScores() {
+        redisUtils.zAdd(KEY_ZSET, "player1", 100);
+        redisUtils.zAdd(KEY_ZSET, "player2", 200);
+        redisUtils.zAdd(KEY_ZSET, "player3", 150);
+
+        Set<ZSetOperations.TypedTuple<Object>> tuples = redisUtils.zRangeAllWithScores(KEY_ZSET);
+        log.info("zRangeAllWithScores ->");
+        for (ZSetOperations.TypedTuple<Object> tuple : tuples) {
+            log.info("  value: {}, score: {}", tuple.getValue(), tuple.getScore());
+        }
+
+        assertEquals(3, tuples.size());
+
+        // 可选地检查某个具体分数
+        ZSetOperations.TypedTuple<Object> player2 = tuples.stream()
+                .filter(t -> "player2".equals(t.getValue()))
+                .findFirst()
+                .orElse(null);
+
+        assertNotNull(player2);
+        assertEquals(200.0, player2.getScore());
     }
 }
