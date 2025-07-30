@@ -134,4 +134,27 @@ public class RedisZSetUtilsTest {
         assertNotNull(player2);
         assertEquals(200.0, player2.getScore());
     }
+
+    @Test
+    @Order(7)
+    @DisplayName("测试 zRemoveRangeByScore")
+    void testZRemoveRangeByScore() {
+        redisUtils.zAdd(KEY_ZSET, "player1", 100);
+        redisUtils.zAdd(KEY_ZSET, "player2", 200);
+        redisUtils.zAdd(KEY_ZSET, "player3", 300);
+        redisUtils.zAdd(KEY_ZSET, "player4", 400);
+
+        // 删除分数在 [150, 350] 之间的元素（包含200和300）
+        long removedCount = redisUtils.zRemoveRangeByScore(KEY_ZSET, 150, 350);
+        log.info("zRemoveRangeByScore(150, 350) 删除了 {} 个元素", removedCount);
+
+        assertEquals(2, removedCount);
+
+        Set<Object> remaining = redisUtils.zRangeAll(KEY_ZSET);
+        log.info("删除后剩余成员: {}", remaining);
+
+        assertEquals(2, remaining.size());
+        assertTrue(remaining.contains("player1"));
+        assertTrue(remaining.contains("player4"));
+    }
 }

@@ -331,6 +331,18 @@ public class RedisUtils {
     }
 
     /**
+     * 删除 ZSet 中 score 在 [min, max] 区间内的元素
+     *
+     * @param key Redis 键
+     * @param min 最小 score（闭区间）
+     * @param max 最大 score（闭区间）
+     * @return 删除的元素数量
+     */
+    public Long zRemoveRangeByScore(String key, double min, double max) {
+        return redisTemplate.opsForZSet().removeRangeByScore(key, min, max);
+    }
+
+    /**
      * 获取 ZSet 中元素的分数
      *
      * @param key   ZSet 的 key
