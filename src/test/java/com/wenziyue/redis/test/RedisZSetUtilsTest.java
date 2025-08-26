@@ -8,7 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.ZSetOperations;
 
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -156,5 +156,151 @@ public class RedisZSetUtilsTest {
         assertEquals(2, remaining.size());
         assertTrue(remaining.contains("player1"));
         assertTrue(remaining.contains("player4"));
+    }
+
+    @Test
+    @Order(8)
+    @DisplayName("测试 batchZAddWithExpire")
+    void testBatchZAddWithExpire() throws InterruptedException {
+        Map<Double, Object> data = new LinkedHashMap<>();
+        data.put(100.0, "userA");
+        data.put(200.0, "userB");
+        data.put(150.0, "userC");
+
+        redisUtils.batchZAddWithExpire(KEY_ZSET, data, 3, TimeUnit.SECONDS);
+
+        Set<Object> range = redisUtils.zRangeAll(KEY_ZSET);
+        log.info("batchZAddWithExpire 插入后的成员: {}", range);
+        assertEquals(3, range.size());
+
+        TimeUnit.SECONDS.sleep(4);
+        assertFalse(redisUtils.hasKey(KEY_ZSET), "ZSet key 应该已过期");
+    }
+
+    @Test
+    @Order(9)
+    @DisplayName("测试 zRangeByRank")
+    void testRangeByRank() {
+        redisUtils.zAdd(KEY_ZSET, "p1", 10);
+        redisUtils.zAdd(KEY_ZSET, "p2", 20);
+        redisUtils.zAdd(KEY_ZSET, "p3", 30);
+        redisUtils.zAdd(KEY_ZSET, "p4", 40);
+
+        Set<Object> asc = redisUtils.zRangeByRank(KEY_ZSET, 0, 1, false);
+        List<Object> ascList = new ArrayList<>(asc);
+        assertEquals(2, ascList.size());
+        assertTrue(ascList.contains("p1") && ascList.contains("p2"));
+
+        Set<Object> desc = redisUtils.zRangeByRank(KEY_ZSET, 0, 1, true);
+        List<Object> descList = new ArrayList<>(desc);
+        assertEquals(2, descList.size());
+        assertTrue(descList.contains("p4") && descList.contains("p3"));
+    }
+
+    @Test
+    @Order(10)
+    @DisplayName("测试 zRangeWithScoresByRank")
+    void testRangeWithScoresByRank() {
+        redisUtils.zAdd(KEY_ZSET, "a", 5);
+        redisUtils.zAdd(KEY_ZSET, "b", 15);
+        redisUtils.zAdd(KEY_ZSET, "c", 25);
+
+        Set<ZSetOperations.TypedTuple<Object>> result = redisUtils.zRangeWithScoresByRank(KEY_ZSET, 0, 1, true);
+        assertEquals(2, result.size());
+
+        Set<Object> values = new HashSet<>();
+        for (ZSetOperations.TypedTuple<Object> t : result) {
+            values.add(t.getValue());
+        }
+        assertTrue(values.contains("c") && values.contains("b"));
+    }
+
+    @Test
+    @Order(11)
+    @DisplayName("测试 zRangeByScore - 基本(score范围，正序，全部列出)")
+    public void testRangeByScore_basic() {
+        redisUtils.zAdd(KEY_ZSET, "x1", 10);
+        redisUtils.zAdd(KEY_ZSET, "x2", 20);
+        redisUtils.zAdd(KEY_ZSET, "x3", 30);
+        // 查 score 在 15 ~ 25 之间的元素
+        Set<Object> res = redisUtils.zRangeByScore(KEY_ZSET, 15, 25, 0, -1, false);
+        // 仅有 x2 满足
+        assertEquals(1, res.size());
+        assertTrue(res.contains("x2"));
+    }
+
+    @Test
+    @Order(12)
+    @DisplayName("测试 zRangeByScoreWithScores - 限制分页 (offset/count)，升序")
+    public void testRangeByScoreWithScores_paged() {
+        redisUtils.zAdd(KEY_ZSET, "a", 5);
+        redisUtils.zAdd(KEY_ZSET, "b", 15);
+        redisUtils.zAdd(KEY_ZSET, "c", 25);
+        redisUtils.zAdd(KEY_ZSET, "d", 35);
+        redisUtils.zAdd(KEY_ZSET, "e", 45);
+        // 取 score 10~40 范围内，第 1 条开始，取 3 条
+        Set<ZSetOperations.TypedTuple<Object>> tuples =
+                redisUtils.zRangeByScoreWithScores(KEY_ZSET, 10, 40, 1, 3, false);
+        List<Object> vals = new ArrayList<Object>();
+        for (ZSetOperations.TypedTuple<Object> t : tuples) {
+            vals.add(t.getValue());
+        }
+        // sorted set 按 score 排序 → "b"(15), "c"(25), "d"(35), limit 从 offset=1 开始，应是 "c","d"
+        assertEquals(2, vals.size());
+        assertTrue(vals.contains("c") && vals.contains("d"));
+    }
+
+    @Test
+    @Order(13)
+    @DisplayName("测试 zRangeByScoreWithScores - 倒序排序")
+    public void testRangeByScoreWithScores_reverse() {
+        redisUtils.zAdd(KEY_ZSET, "p1", 100);
+        redisUtils.zAdd(KEY_ZSET, "p2", 200);
+        redisUtils.zAdd(KEY_ZSET, "p3", 300);
+        Set<ZSetOperations.TypedTuple<Object>> tuples =
+                redisUtils.zRangeByScoreWithScores(KEY_ZSET, 100, 300, 0, -1, true);
+        List<Object> order = new ArrayList<Object>();
+        for (ZSetOperations.TypedTuple<Object> t : tuples) {
+            order.add(t.getValue());
+        }
+        // 倒序结果应为 p3 (300), p2 (200), p1 (100)
+        assertEquals("p3", order.get(0));
+        assertEquals("p2", order.get(1));
+        assertEquals("p1", order.get(2));
+    }
+
+    @Test
+    @Order(14)
+    @DisplayName("测试 zRangeByScore - 翻页功能")
+    public void testRangeByScore_offsetCount() {
+        redisUtils.zAdd(KEY_ZSET, "u1", 10);
+        redisUtils.zAdd(KEY_ZSET, "u2", 20);
+        redisUtils.zAdd(KEY_ZSET, "u3", 30);
+        redisUtils.zAdd(KEY_ZSET, "u4", 40);
+        redisUtils.zAdd(KEY_ZSET, "u5", 50);
+        // 查 score 0~60, 以 offset 2, count 2, 正序：期望 "u3","u4"
+        Set<Object> res = redisUtils.zRangeByScore(KEY_ZSET, 0, 60, 2, 2, false);
+        List<Object> ordered = new ArrayList<Object>(res);
+        assertEquals(2, ordered.size());
+        assertTrue(ordered.contains("u3"));
+        assertTrue(ordered.contains("u4"));
+    }
+
+    @Test
+    @Order(15)
+    @DisplayName("测试 zRangeByScoreWithScores - 空结果及无 key")
+    public void testRangeByScoreWithScores_emptyOrNoKey() {
+        // 不存在的 key 返回 空集合
+        Set<ZSetOperations.TypedTuple<Object>> noKeyRes =
+                redisUtils.zRangeByScoreWithScores("nonexistent", 0, 50, 0, -1, false);
+        assertNotNull(noKeyRes);
+        assertTrue(noKeyRes.isEmpty());
+
+        // 存在 key 但 score 无成员
+        redisUtils.zAdd(KEY_ZSET, "item", 15);
+        Set<ZSetOperations.TypedTuple<Object>> outside =
+                redisUtils.zRangeByScoreWithScores(KEY_ZSET, 100, 200, 0, -1, false);
+        assertNotNull(outside);
+        assertTrue(outside.isEmpty());
     }
 }

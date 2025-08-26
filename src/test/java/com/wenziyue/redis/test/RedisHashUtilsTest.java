@@ -7,8 +7,10 @@ import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -70,7 +72,7 @@ public class RedisHashUtilsTest {
         redisUtils.hSet(KEY_HASH, "field1", "value1");
         redisUtils.hSet(KEY_HASH, "field2", "value2");
 
-        redisUtils.hDel(KEY_HASH, "field1");
+        redisUtils.hDel(KEY_HASH, Collections.singletonList("field1").toArray());
         log.info("hDel field 'field1'");
 
         assertFalse(redisUtils.hHasKey(KEY_HASH, "field1"), "Field 'field1' 不应再存在");
