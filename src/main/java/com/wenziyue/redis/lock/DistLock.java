@@ -13,6 +13,7 @@ import java.util.concurrent.*;
 
 /**
  * 看门狗续期的分布式锁
+ * 思路很简单：拿锁时写入唯一值；一个后台线程定期续期（PEXPIRE），只在值相等时续，避免给别人的锁续命。结束时释放锁也要比对值再 DEL。
  *
  * @author wenziyue
  */
