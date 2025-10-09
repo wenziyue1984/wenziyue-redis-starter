@@ -303,4 +303,26 @@ public class RedisZSetUtilsTest {
         assertNotNull(outside);
         assertTrue(outside.isEmpty());
     }
+
+    @Test
+    @Order(16)
+    @DisplayName("测试 zRangeByScoreEq - 取出指定 score 的所有成员")
+    void testZRangeByScoreEq() {
+        // 准备数据：两个成员同分 100，另外各有 200/300
+        redisUtils.zAdd(KEY_ZSET, 100L, 100);
+        redisUtils.zAdd(KEY_ZSET, 101L, 200);
+        redisUtils.zAdd(KEY_ZSET, 102L, 100);
+        redisUtils.zAdd(KEY_ZSET, 103L, 300);
+
+        // 等分查询：应该只返回 m1 与 m3（不关心顺序）
+        Set<Object> eq100 = redisUtils.zRangeByScoreEq(KEY_ZSET, 100);
+        assertEquals(2, eq100.size());
+        assertTrue(eq100.contains("100"));
+        assertTrue(eq100.contains("102"));
+
+        // 不存在的分数：应返回空集合
+        Set<Object> eq999 = redisUtils.zRangeByScoreEq(KEY_ZSET, 999);
+        assertNotNull(eq999);
+        assertTrue(eq999.isEmpty());
+    }
 }

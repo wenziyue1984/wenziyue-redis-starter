@@ -32,8 +32,10 @@ public class RedisUtils {
 
     private final RedisTemplate<String, Object> redisTemplate;
 
-    // 专用于 Stream 操作的 RedisTemplate，key 和 value 都是 String 类型
     private final RedisTemplate<String, String> stringRedisTemplate;
+    private StreamOperations<String, String, String> streamOps() {
+        return stringRedisTemplate.opsForStream();
+    }
 
     private final RedisScript<Long> incrementWithExpire;
     private final RedisScript<Long> sAddAndExpire;
@@ -323,39 +325,34 @@ public class RedisUtils {
     // ======================== ZSet ========================
 
     public void zAdd(String key, Object value, double score) {
-        redisTemplate.opsForZSet().add(key, value, score);
+        stringRedisTemplate.opsForZSet().add(key, String.valueOf(value), score);
     }
 
     public void zAdd(String key, Object value, double score, long time, TimeUnit timeUnit) {
         long timeoutSeconds = timeUnit.toSeconds(time);
-        redisTemplate.execute(
+        stringRedisTemplate.execute(
                 zAddAndExpire,
                 Collections.singletonList(key),
-                value.toString(),
-                score,
-                timeoutSeconds
+                String.valueOf(value),
+                String.valueOf(score),
+                String.valueOf(timeoutSeconds)
         );
     }
 
     public void batchZAddWithExpire(String key, Map<Double, Object> valueMap, long time, TimeUnit timeUnit) {
         List<String> keys = Collections.singletonList(key);
-
-        // 构造 ARGV 参数：第 1 个为过期秒数，后面依次是 score, member 对
-        List<Object> args = new ArrayList<>();
-        args.add(timeUnit.toSeconds(time));
-        for (Map.Entry<Double, Object> entry : valueMap.entrySet()) {
-            args.add(entry.getKey());
-            args.add(entry.getValue().toString());
+        List<String> args = new ArrayList<>();
+        args.add(String.valueOf(timeUnit.toSeconds(time))); // 过期秒数
+        for (Map.Entry<Double, Object> e : valueMap.entrySet()) {
+            args.add(String.valueOf(e.getKey())); // score
+            args.add(String.valueOf(e.getValue())); // member（字符串）
         }
-        redisTemplate.execute(
-                batchZAddWithExpire,
-                keys,
-                args.toArray()
-        );
+        stringRedisTemplate.execute(batchZAddWithExpire, keys, args.toArray());
     }
 
     public Set<Object> zRange(String key, long start, long end) {
-        return redisTemplate.opsForZSet().range(key, start, end);
+        Set<String> r = stringRedisTemplate.opsForZSet().range(key, start, end);
+        return toObjectSet(r);
     }
 
     /**
@@ -368,11 +365,10 @@ public class RedisUtils {
      * @return 指定区间内的元素集合
      */
     public Set<Object> zRangeByRank(String key, long start, long end, boolean reverse) {
-        if (reverse) {
-            return redisTemplate.opsForZSet().reverseRange(key, start, end);
-        } else {
-            return redisTemplate.opsForZSet().range(key, start, end);
-        }
+        Set<String> r = reverse
+                ? stringRedisTemplate.opsForZSet().reverseRange(key, start, end)
+                : stringRedisTemplate.opsForZSet().range(key, start, end);
+        return toObjectSet(r);
     }
 
     /**
@@ -385,11 +381,10 @@ public class RedisUtils {
      * @return Set of TypedTuple，包含元素及对应 score
      */
     public Set<ZSetOperations.TypedTuple<Object>> zRangeWithScoresByRank(String key, long start, long end, boolean reverse) {
-        if (reverse) {
-            return redisTemplate.opsForZSet().reverseRangeWithScores(key, start, end);
-        } else {
-            return redisTemplate.opsForZSet().rangeWithScores(key, start, end);
-        }
+        Set<ZSetOperations.TypedTuple<String>> r = reverse
+                ? stringRedisTemplate.opsForZSet().reverseRangeWithScores(key, start, end)
+                : stringRedisTemplate.opsForZSet().rangeWithScores(key, start, end);
+        return toObjectTuples(r);
     }
 
     /**
@@ -405,11 +400,10 @@ public class RedisUtils {
      * @return 成员集合
      */
     public Set<Object> zRangeByScore(String key, double minScore, double maxScore, long offset, long count, boolean reverse) {
-        if (reverse) {
-            return redisTemplate.opsForZSet().reverseRangeByScore(key, minScore, maxScore, offset, count);
-        } else {
-            return redisTemplate.opsForZSet().rangeByScore(key, minScore, maxScore, offset, count);
-        }
+        Set<String> r = reverse
+                ? stringRedisTemplate.opsForZSet().reverseRangeByScore(key, minScore, maxScore, offset, count)
+                : stringRedisTemplate.opsForZSet().rangeByScore(key, minScore, maxScore, offset, count);
+        return toObjectSet(r);
     }
 
     /**
@@ -423,17 +417,18 @@ public class RedisUtils {
      * @param reverse true：降序排序；false：升序
      * @return TypedTuple 元素带 score
      */
-    public Set<ZSetOperations.TypedTuple<Object>> zRangeByScoreWithScores(String key, double minScore, double maxScore,
-                                                                         long offset, long count, boolean reverse) {
-        if (reverse) {
-            return redisTemplate.opsForZSet().reverseRangeByScoreWithScores(key, minScore, maxScore, offset, count);
-        } else {
-            return redisTemplate.opsForZSet().rangeByScoreWithScores(key, minScore, maxScore, offset, count);
-        }
+    public Set<ZSetOperations.TypedTuple<Object>> zRangeByScoreWithScores(
+            String key, double minScore, double maxScore, long offset, long count, boolean reverse) {
+        Set<ZSetOperations.TypedTuple<String>> r = reverse
+                ? stringRedisTemplate.opsForZSet().reverseRangeByScoreWithScores(key, minScore, maxScore, offset, count)
+                : stringRedisTemplate.opsForZSet().rangeByScoreWithScores(key, minScore, maxScore, offset, count);
+        return toObjectTuples(r);
     }
 
     public Long zRemove(String key, Object... values) {
-        return redisTemplate.opsForZSet().remove(key, values);
+        // 统一转成字符串，避免混序列化
+        String[] members = Arrays.stream(values).map(String::valueOf).toArray(String[]::new);
+        return stringRedisTemplate.opsForZSet().remove(key, (Object[]) members);
     }
 
     /**
@@ -445,7 +440,7 @@ public class RedisUtils {
      * @return 删除的元素数量
      */
     public Long zRemoveRangeByScore(String key, double min, double max) {
-        return redisTemplate.opsForZSet().removeRangeByScore(key, min, max);
+        return stringRedisTemplate.opsForZSet().removeRangeByScore(key, min, max);
     }
 
     /**
@@ -456,7 +451,7 @@ public class RedisUtils {
      * @return 分数，如果元素不存在或value不存在则返回 null
      */
     public Double zScore(String key, Object value) {
-        return redisTemplate.opsForZSet().score(key, value);
+        return stringRedisTemplate.opsForZSet().score(key, String.valueOf(value));
     }
 
     /**
@@ -466,7 +461,7 @@ public class RedisUtils {
      * @return 元素个数，如果 key 不存在，返回 0
      */
     public long zSize(String key) {
-        Long size = redisTemplate.opsForZSet().size(key);
+        Long size = stringRedisTemplate.opsForZSet().size(key);
         return size != null ? size : 0L;
     }
 
@@ -477,7 +472,8 @@ public class RedisUtils {
      * @return 元素集合，如果 key 不存在返回空集合
      */
     public Set<Object> zRangeAll(String key) {
-        return redisTemplate.opsForZSet().range(key, 0, -1);
+        Set<String> r = stringRedisTemplate.opsForZSet().range(key, 0, -1);
+        return toObjectSet(r);
     }
 
     /**
@@ -487,14 +483,38 @@ public class RedisUtils {
      * @return 元素与分数组成的集合，如果 key 不存在返回空集合
      */
     public Set<ZSetOperations.TypedTuple<Object>> zRangeAllWithScores(String key) {
-        return redisTemplate.opsForZSet().rangeWithScores(key, 0, -1);
+        Set<ZSetOperations.TypedTuple<String>> r = stringRedisTemplate.opsForZSet().rangeWithScores(key, 0, -1);
+        return toObjectTuples(r);
+    }
+
+    /** 获取 ZSet 中 score 等于给定值的所有成员（不含分数） */
+    public Set<Object> zRangeByScoreEq(String key, double score) {
+        Set<String> r = stringRedisTemplate.opsForZSet().rangeByScore(key, score, score);
+        return toObjectSet(r);
+    }
+
+    /* ---------- 工具：做返回类型适配 ---------- */
+    private static Set<Object> toObjectSet(Set<String> in) {
+        if (in == null || in.isEmpty()) return Collections.emptySet();
+        LinkedHashSet<Object> out = new LinkedHashSet<>(in.size());
+        out.addAll(in); // String 是 Object，保持顺序
+        return out;
+    }
+
+    private static Set<ZSetOperations.TypedTuple<Object>> toObjectTuples(Set<ZSetOperations.TypedTuple<String>> in) {
+        if (in == null || in.isEmpty()) return Collections.emptySet();
+        LinkedHashSet<ZSetOperations.TypedTuple<Object>> out = new LinkedHashSet<>(in.size());
+        for (ZSetOperations.TypedTuple<String> t : in) {
+            if (t == null) continue;
+            // 重新包一层，泛型改为 Object，score 保持不变
+            out.add(new org.springframework.data.redis.core.DefaultTypedTuple<>(
+                    t.getValue(), t.getScore()
+            ));
+        }
+        return out;
     }
 
     // ======================== Stream ========================
-
-    private StreamOperations<String, String, String> streamOps() {
-        return stringRedisTemplate.opsForStream();
-    }
 
     /**
      * 创建消费者组（如果已存在则忽略异常）
@@ -646,7 +666,7 @@ public class RedisUtils {
         );
     }
 
-    private final RedisTemplate<String, String> redisStreamTemplate;
+
 
     /**
      * 将 Redis Stream 中处于 Pending 状态并且超过最小空闲时间的消息重新分配给指定的消费者。
@@ -671,7 +691,7 @@ public class RedisUtils {
             return Collections.emptyList();
         }
 
-        return redisStreamTemplate.opsForStream().claim(
+        return stringRedisTemplate.opsForStream().claim(
                 key,
                 group,
                 newConsumer,
