@@ -22,9 +22,9 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 @ConditionalOnClass(RedisTemplate.class)  // 如果类路径中有 RedisTemplate，才会执行这个配置
 public class WenziyueRedisAutoConfiguration {
 
-    @Bean
-    @ConditionalOnMissingBean
-    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory factory) {
+    @Bean(name = "wzyRedisTemplate")
+    @ConditionalOnMissingBean(name = "wzyRedisTemplate")
+    public RedisTemplate<String, Object> wzyRedisTemplate(RedisConnectionFactory factory) {
         RedisTemplate<String, Object> template = new RedisTemplate<>();
 
         // key 使用 String 序列化
@@ -106,16 +106,19 @@ public class WenziyueRedisAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(RedisUtils.class)
-    public RedisUtils redisUtils(RedisTemplate<String, Object> redisTemplate,
-                                 StringRedisTemplate stringRedisTemplate,
-                                 RedisScript<Long> incrementWithExpire,
-                                 RedisScript<Long> sAddAndExpire,
-                                 RedisScript<Long> hSetAllAndExpire,
-                                 RedisScript<Long> lPushAndExpire,
-                                 RedisScript<Long> rPushAndExpire,
-                                 RedisScript<Long> zAddAndExpire,
-                                 RedisScript<Long> setIfAbsentAndExpire,
-                                 RedisScript<Long> batchZAddWithExpire) {
+    public RedisUtils redisUtils(
+            @org.springframework.beans.factory.annotation.Qualifier("wzyRedisTemplate")
+            RedisTemplate<String, Object> redisTemplate,
+            StringRedisTemplate stringRedisTemplate,
+            RedisScript<Long> incrementWithExpire,
+            RedisScript<Long> sAddAndExpire,
+            RedisScript<Long> hSetAllAndExpire,
+            RedisScript<Long> lPushAndExpire,
+            RedisScript<Long> rPushAndExpire,
+            RedisScript<Long> zAddAndExpire,
+            RedisScript<Long> setIfAbsentAndExpire,
+            RedisScript<Long> batchZAddWithExpire) {
+
         return new RedisUtils(redisTemplate, stringRedisTemplate,
                 incrementWithExpire, sAddAndExpire, hSetAllAndExpire,
                 lPushAndExpire, rPushAndExpire, zAddAndExpire,
