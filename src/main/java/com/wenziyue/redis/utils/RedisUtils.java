@@ -8,11 +8,8 @@ import org.springframework.data.redis.connection.RedisStreamCommands;
 import org.springframework.data.redis.connection.ReturnType;
 import org.springframework.data.redis.connection.StringRedisConnection;
 import org.springframework.data.redis.connection.stream.*;
-import org.springframework.data.redis.core.RedisCallback;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.*;
 import com.alibaba.fastjson.JSON;
-import org.springframework.data.redis.core.StreamOperations;
-import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
 
@@ -26,13 +23,13 @@ import java.util.concurrent.TimeUnit;
  *
  * @author wenziyue
  */
-@Component
+//@Component
 @RequiredArgsConstructor
 public class RedisUtils {
 
     private final RedisTemplate<String, Object> redisTemplate;
 
-    private final RedisTemplate<String, String> stringRedisTemplate;
+    private final StringRedisTemplate stringRedisTemplate;
     private StreamOperations<String, String, String> streamOps() {
         return stringRedisTemplate.opsForStream();
     }
