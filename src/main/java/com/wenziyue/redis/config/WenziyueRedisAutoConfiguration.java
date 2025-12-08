@@ -1,6 +1,10 @@
 package com.wenziyue.redis.config;
 
-import com.alibaba.fastjson.support.spring.FastJsonRedisSerializer;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.wenziyue.redis.lock.DistLockFactory;
 import com.wenziyue.redis.utils.RedisUtils;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -13,7 +17,10 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
+import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
+
+import java.util.TimeZone;
 
 /**
  * @author wenziyue
@@ -22,25 +29,80 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 @ConditionalOnClass(RedisTemplate.class)  // 如果类路径中有 RedisTemplate，才会执行这个配置
 public class WenziyueRedisAutoConfiguration {
 
+    /**
+     * 给 Redis JSON 专用的 ObjectMapper
+     * 重点是：**开启类型信息，但限制可反序列化的包范围**
+     */
+    @Bean(name = "wzyRedisObjectMapper")
+    @ConditionalOnMissingBean(name = "wzyRedisObjectMapper")
+    public ObjectMapper wzyRedisObjectMapper() {
+        BasicPolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
+                // 你可以按你的 starter 生态扩展这个白名单
+                .allowIfSubType("com.wenziyue")
+                .allowIfSubType("java.util")
+                .allowIfSubType("java.lang")
+                .build();
+
+        ObjectMapper mapper = JsonMapper.builder()
+                .addModule(new JavaTimeModule())
+                .build();
+
+        mapper.setTimeZone(TimeZone.getTimeZone("Asia/Shanghai"));
+
+        // 等价于你 FastJSON 的“写类名 + 读类名”
+        // 这里用白名单验证器收口默认边界
+        mapper.activateDefaultTyping(
+                ptv,
+                ObjectMapper.DefaultTyping.NON_FINAL,
+                JsonTypeInfo.As.PROPERTY
+        );
+
+        return mapper;
+    }
+
     @Bean(name = "wzyRedisTemplate")
     @ConditionalOnMissingBean(name = "wzyRedisTemplate")
-    public RedisTemplate<String, Object> wzyRedisTemplate(RedisConnectionFactory factory) {
+    public RedisTemplate<String, Object> wzyRedisTemplate(
+            RedisConnectionFactory factory,
+            ObjectMapper wzyRedisObjectMapper
+    ) {
         RedisTemplate<String, Object> template = new RedisTemplate<>();
 
-        // key 使用 String 序列化
         StringRedisSerializer stringSerializer = new StringRedisSerializer();
         template.setKeySerializer(stringSerializer);
         template.setHashKeySerializer(stringSerializer);
 
-        // value 使用 FastJson 序列化
-        FastJsonRedisSerializer<Object> fastJsonRedisSerializer = new FastJsonRedisSerializer<>(Object.class);
-        template.setValueSerializer(fastJsonRedisSerializer);
-        template.setHashValueSerializer(fastJsonRedisSerializer);
+        GenericJackson2JsonRedisSerializer jsonSerializer =
+                new GenericJackson2JsonRedisSerializer(wzyRedisObjectMapper);
+
+        template.setValueSerializer(jsonSerializer);
+        template.setHashValueSerializer(jsonSerializer);
 
         template.setConnectionFactory(factory);
         template.afterPropertiesSet();
         return template;
     }
+
+
+//    @Bean(name = "wzyRedisTemplate")
+//    @ConditionalOnMissingBean(name = "wzyRedisTemplate")
+//    public RedisTemplate<String, Object> wzyRedisTemplate(RedisConnectionFactory factory) {
+//        RedisTemplate<String, Object> template = new RedisTemplate<>();
+//
+//        // key 使用 String 序列化
+//        StringRedisSerializer stringSerializer = new StringRedisSerializer();
+//        template.setKeySerializer(stringSerializer);
+//        template.setHashKeySerializer(stringSerializer);
+//
+//        // value 使用 FastJson 序列化
+//        FastJsonRedisSerializer<Object> fastJsonRedisSerializer = new FastJsonRedisSerializer<>(Object.class);
+//        template.setValueSerializer(fastJsonRedisSerializer);
+//        template.setHashValueSerializer(fastJsonRedisSerializer);
+//
+//        template.setConnectionFactory(factory);
+//        template.afterPropertiesSet();
+//        return template;
+//    }
 
     @Bean
     @ConditionalOnMissingBean(StringRedisTemplate.class)
@@ -110,6 +172,7 @@ public class WenziyueRedisAutoConfiguration {
             @org.springframework.beans.factory.annotation.Qualifier("wzyRedisTemplate")
             RedisTemplate<String, Object> redisTemplate,
             StringRedisTemplate stringRedisTemplate,
+            ObjectMapper wzyRedisObjectMapper,
             RedisScript<Long> incrementWithExpire,
             RedisScript<Long> sAddAndExpire,
             RedisScript<Long> hSetAllAndExpire,
@@ -119,7 +182,7 @@ public class WenziyueRedisAutoConfiguration {
             RedisScript<Long> setIfAbsentAndExpire,
             RedisScript<Long> batchZAddWithExpire) {
 
-        return new RedisUtils(redisTemplate, stringRedisTemplate,
+        return new RedisUtils(redisTemplate, stringRedisTemplate, wzyRedisObjectMapper,
                 incrementWithExpire, sAddAndExpire, hSetAllAndExpire,
                 lPushAndExpire, rPushAndExpire, zAddAndExpire,
                 setIfAbsentAndExpire, batchZAddWithExpire);

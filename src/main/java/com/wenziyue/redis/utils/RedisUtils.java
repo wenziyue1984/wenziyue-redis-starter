@@ -1,5 +1,6 @@
 package com.wenziyue.redis.utils;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.val;
 import org.springframework.data.domain.Range;
@@ -9,7 +10,6 @@ import org.springframework.data.redis.connection.ReturnType;
 import org.springframework.data.redis.connection.StringRedisConnection;
 import org.springframework.data.redis.connection.stream.*;
 import org.springframework.data.redis.core.*;
-import com.alibaba.fastjson.JSON;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
 
@@ -30,6 +30,7 @@ public class RedisUtils {
     private final RedisTemplate<String, Object> redisTemplate;
 
     private final StringRedisTemplate stringRedisTemplate;
+    private final ObjectMapper wzyRedisObjectMapper;
     private StreamOperations<String, String, String> streamOps() {
         return stringRedisTemplate.opsForStream();
     }
@@ -150,8 +151,14 @@ public class RedisUtils {
         if (clazz.isInstance(value)) {
             return clazz.cast(value);
         }
-        // 如果不是直接实例，尝试用 fastjson 反序列化
-        return JSON.parseObject(value.toString(), clazz);
+        try {
+            if (value instanceof String) {
+                return wzyRedisObjectMapper.readValue((String) value, clazz);
+            }
+            return wzyRedisObjectMapper.convertValue(value, clazz);
+        } catch (Exception e) {
+            throw new IllegalStateException("Redis value convert failed, key=" + key + ", target=" + clazz.getName(), e);
+        }
     }
 
     // ======================== Hash ========================
