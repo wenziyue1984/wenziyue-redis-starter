@@ -10,6 +10,11 @@
             <username>${env.GITHUB_ACTOR}</username>         <!-- 自动注入当前 GitHub 用户名 -->
             <password>${env.GITHUB_TOKEN}</password>         <!-- 自动注入 GITHUB_TOKEN，无需手动配置 -->
         </server>
+        <server>
+            <id>github-bom</id>
+            <username>${env.GITHUB_ACTOR}</username>
+            <password>${env.GITHUB_TOKEN}</password>
+        </server>
     </servers>
 
     <!-- 配置使用阿里云和中央仓库的镜像源 -->
@@ -31,6 +36,14 @@
                     <url>https://repo.maven.apache.org/maven2</url>
                     <releases><enabled>true</enabled></releases>
                     <snapshots><enabled>false</enabled></snapshots>
+                </repository>
+
+                <!-- BOM 仓库 -->
+                <repository>
+                    <id>github-bom</id>
+                    <url>https://maven.pkg.github.com/wenziyue1984/wenziyue-bom</url>
+                    <releases><enabled>true</enabled></releases>
+                    <snapshots><enabled>true</enabled></snapshots>
                 </repository>
             </repositories>
 
